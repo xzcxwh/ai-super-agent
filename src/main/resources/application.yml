@@ -1,0 +1,188 @@
+# ============================================================================
+# application.yml —— 整个项目的"总控面板"
+# ============================================================================
+# 通俗理解：
+#   就像手机设置 App，改这里的值就能改变项目行为，不用改代码。
+#   比如：端口号、API 密钥、用什么模型、要不要打详细日志……
+#
+# YAML 语法小提示（零基础必看）：
+#   - 缩进用空格（不能用 Tab！），缩进层级表示"父子关系"
+#   - # 号开头的是注释，计算机会忽略
+#   - key: value 格式，冒号后面要加一个空格
+#   - 每一层的缩进通常 2 个空格
+# ============================================================================
+
+
+# ============================================================================
+# 第一大块：Spring 框架核心配置
+# ============================================================================
+spring:
+
+  # --- 1-1. 项目名称 ---
+  application:
+    name: yu-ai-agent                           # 项目名字，Spring 内部用来标识这个应用
+
+  # --- 1-2. 异步请求超时（解决 SSE 连接随机断开的问题） ---
+  # Tomcat 默认异步超时只有 30 秒，AI 多轮 Think-Act 很容易超过。
+  # 这里设成和 SseEmitter 一样的 5 分钟，避免 Tomcat 提前掐断连接。
+  mvc:
+    async:
+      request-timeout: 300000                    # 异步请求超时：5 分钟（单位毫秒）
+
+  # --- 1-3. 环境选择（Profile 机制） ---
+  # Profile 是什么？
+  #   同一份代码，在不同环境下需要不同的配置。
+  #   比如：开发时用测试 API Key，上线后用正式 Key。
+  #   Spring 的做法：写多个 yml 文件，用一个开关（active）来选。
+  #
+  # 当前值 local 表示额外加载 application-local.yml，
+  # 那个文件里放的敏感信息（真实 API Key），不会被提交到 Git。
+  profiles:
+    active: local                               # 激活 "local" 环境配置
+
+  # --- 1-3. 数据库连接（已注释） ---
+  # 下面这段被 # 号注释掉了，所以暂时不起作用。
+  # 什么时候打开？需要用 PgVector（PostgreSQL 向量存储）的时候，
+  # 填上真实的数据库地址、用户名、密码，然后把 # 号删掉。
+  #  datasource:
+  #    url: xxx                                  # 数据库连接地址（格式：jdbc:postgresql://IP:端口/数据库名）
+  #    username: root                            # 数据库用户名
+  #    password: 123456                          # 数据库密码
+
+  # ==========================================================================
+  # 第二大块：AI 模型配置（整个项目最重要的配置！）
+  # ==========================================================================
+  ai:
+
+    # --- 2-1. 阿里云百炼 DashScope 大模型（本项目主力模型） ---
+    dashscope:
+      # ⚠️ API 密钥：连接阿里云大模型的"钥匙"
+      #    这里的值 your-api-key 只是一个占位符，真实 Key 在 application-local.yml 里。
+      #    去哪里获取？ https://dashscope.aliyun.com/ → 注册 → 创建 API Key
+      api-key: your-api-key
+
+      # 聊天模型的具体参数
+      chat:
+        options:
+          # 使用哪个模型？
+          #   qwen-plus  = 通义千问 Plus（性价比高，本项目默认）
+          #   qwen-max   = 通义千问 Max（最强，但贵）
+          #   qwen-turbo = 通义千问 Turbo（最快，但能力弱一些）
+          model: qwen-plus
+
+    # --- 2-2. Ollama 本地大模型（备选方案） ---
+    # 什么是 Ollama？
+    #   一个让你在自己电脑上跑大模型的工具，不需要联网，不花 API 费用。
+    #   前提：电脑配置够好（内存大、有显卡），且下载了模型。
+    #   下载地址：https://ollama.com
+    ollama:
+      base-url: http://localhost:11434           # Ollama 服务的地址（默认在本机 11434 端口）
+      chat:
+        model: gemma3:1b                         # 用的 Ollama 模型名（gemma3:1b 是轻量模型，适合个人电脑）
+
+    # --- 2-3. MCP 客户端连接（已注释） ---
+    # MCP = Model Context Protocol，让 AI 能调用"外部工具服务"。
+    # 下面的配置告诉系统："有哪些外部 MCP 工具服务器可以用"。
+    # 当前注释掉了，因为开发环境中 MCP 服务（图片搜索）没有启动。
+    #    mcp:
+    #      client:
+    #        sse:                                 # SSE 方式连接的 MCP 服务
+    #          connections:
+    #            server1:                         # 给服务起个名字
+    #              url: http://localhost:8127     # MCP 服务的地址
+    #        stdio:                               # 标准输入输出方式连接的 MCP 服务
+    #          servers-configuration: classpath:mcp-servers.json  # 从 JSON 文件读取配置
+
+    # --- 2-4. PgVector 向量存储（已注释） ---
+    # 向量存储是什么？
+    #   把文档转成"数学指纹"（向量），存到数据库里，方便做相似度搜索。
+    #   PgVector 是 PostgreSQL 的向量扩展插件，让数据库能存向量。
+    # 当前注释掉了，开发环境用 SimpleVectorStore（基于内存的，不用装数据库）。
+    #    vectorstore:
+    #      pgvector:
+    #        index-type: HNSW                     # 索引算法（HNSW = 速度快、准确率高）
+    #        dimensions: 1536                     # 向量维度（1536 是通义千问嵌入模型的默认维度）
+    #        distance-type: COSINE_DISTANCE       # 距离计算方式（COSINE = 余弦相似度，看"方向"不看"绝对距离"）
+    #        max-document-batch-size: 10000       # 每次最多插入多少文档（批量入库时用）
+
+
+# ============================================================================
+# 第三大块：服务器配置（端口、路径、编码）
+# ============================================================================
+server:
+
+  # --- 3-1. 端口号 ---
+  # 项目启动后，访问 http://localhost:8123 就能访问后端。
+  # 如果端口被占用，换一个数字就行（比如 8124）。
+  port: 8123
+
+  servlet:
+    # --- 3-2. 上下文路径（所有接口的统一前缀） ---
+    # 什么意思？
+    #   本来写 @GetMapping("/health") 的接口，实际地址是 localhost:8123/health
+    #   设了 context-path: /api 后，实际地址变成 localhost:8123/api/health
+    #   好处：前端 /api/xxx 和后端接口路径天然对齐，不需要额外配代理
+    context-path: /api
+
+    # --- 3-3. 字符编码（解决中文乱码的关键！） ---
+    encoding:
+      charset: UTF-8                             # 编码格式：UTF-8（支持所有中文和 emoji）
+      enabled: true                              # 开启编码配置
+      force: true                                # 强制使用 UTF-8（覆盖浏览器的默认编码偏好）
+
+  # --- 3-4. Tomcat URI 编码 ---
+  # 指定 URL 中参数的编码格式。
+  # 比如 /api/ai/chat?message=你好 中的"你好"用什么编码来解析。
+  tomcat:
+    uri-encoding: UTF-8
+
+
+# ============================================================================
+# 第四大块：接口文档配置（Swagger / Knife4j）
+# ============================================================================
+
+# --- 4-1. SpringDoc（自动生成接口文档的工具） ---
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html                      # 文档页面的访问地址
+    tags-sorter: alpha                          # 接口分组按字母排序
+    operations-sorter: alpha                    # 接口方法按字母排序
+  api-docs:
+    path: /v3/api-docs                          # API 文档的 JSON 数据地址（给程序读的）
+  group-configs:
+    - group: 'default'                          # 文档分组名
+      paths-to-match: '/**'                     # 扫描哪些路径下的接口
+      packages-to-scan: com.yupi.yuaiagent.controller  # 扫描哪个包里的 Controller
+
+# --- 4-2. Knife4j（SpringDoc 的中文美化版） ---
+# 访问地址：http://localhost:8123/api/doc.html（Knife4j 专属页面）
+knife4j:
+  enable: true                                  # 启用 Knife4j
+  setting:
+    language: zh_cn                             # 文档界面语言：中文
+
+
+# ============================================================================
+# 第五大块：自定义业务配置
+# ============================================================================
+
+# --- 5-1. 搜索 API 密钥 ---
+# 百度搜索工具（WebSearchTool）需要调用 searchapi.io 的搜索 API，
+# 这里配置那个 API 的密钥。
+# "你的 API Key" 是占位符，需要去 https://www.searchapi.io 注册获取。
+search-api:
+  api-key: 你的 API Key
+
+
+# ============================================================================
+# 第六大块：日志级别配置
+# ============================================================================
+logging:
+  level:
+    # 把 Spring AI 包的日志级别设为 DEBUG
+    # DEBUG 会打印非常详细的日志，包括：
+    #   - 每次 AI 请求的完整 Prompt（发给大模型的内容）
+    #   - 每次 AI 返回的完整 Response（大模型的回复）
+    #   - 工具调用的详细信息
+    # 调试时打开，上线后改成 INFO（只保留关键信息）或者 WARN（只看警告和错误）
+    org.springframework.ai: DEBUG
